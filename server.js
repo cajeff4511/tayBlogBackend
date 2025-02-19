@@ -1,6 +1,6 @@
 const express = require('express')
 const cors = require('cors')
-const bcrypt = require('bcrypt')
+const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken')
 const mongoose = require('mongoose')
 const app = express()
@@ -16,6 +16,8 @@ mongoose.connect('mongodb+srv://jeffersonchristian259:Ivh5vgdJAnd9Px2G@taysblog.
 .catch(() => {
     console.log('db connection error!')
 })
+
+
 app.get('/', (req, res) => {
     res.send("hello")
 })
