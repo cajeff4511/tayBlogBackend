@@ -1,10 +1,9 @@
-
 /*********************************
  *  SETUP & DEPENDENCIES
  *********************************/
 const express = require('express');
 const cors = require('cors');
-const bcrypt = require('bcryptjs');   // <-- Using bcryptjs
+const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
 
@@ -18,7 +17,7 @@ app.use(express.json());
 /*********************************
  *  MONGOOSE CONNECTION
  *********************************/
-mongoose.connect('mongodb+srv://jeffersonchristian259:Ivh5vgdJAnd9Px2G@taysblog.ldkit.mongodb.net/Blog')
+mongoose.connect('mongodb+srv://<username>:<password>@taysblog.ldkit.mongodb.net/Blog')
   .then(() => {
     console.log('db connected!');
   })
@@ -44,7 +43,11 @@ const BlogSchema = new mongoose.Schema(
     img: {
       type: String,
       required: true,
-    }
+    },
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Tay',   // references the "Tay" model (User)
+    },
   },
   { timestamps: true }
 );
@@ -57,7 +60,7 @@ const TaySchema = new mongoose.Schema(
     username: {
       type: String,
       required: true,
-      unique: true  // often want unique usernames
+      unique: true
     },
     password: {
       type: String,
@@ -70,6 +73,29 @@ const TaySchema = new mongoose.Schema(
 const Tay = mongoose.model('Tay', TaySchema);
 
 /*********************************
+ *  AUTH MIDDLEWARE
+ *********************************/
+function authenticateUser(req, res, next) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) {
+    return res.status(401).json({ error: 'No token provided.' });
+  }
+
+  const token = authHeader.split(' ')[1];
+  if (!token) {
+    return res.status(401).json({ error: 'Malformed token.' });
+  }
+
+  try {
+    const decoded = jwt.verify(token, 'MY_SUPER_SECRET_KEY');
+    req.user = decoded; // store user data in req
+    next();
+  } catch (err) {
+    return res.status(401).json({ error: 'Invalid or expired token.' });
+  }
+}
+
+/*********************************
  *  ROUTES
  *********************************/
 
@@ -80,20 +106,17 @@ app.get('/', (req, res) => {
 
 /**
  * 2) Register a new user
- *    - Expects { username, password } in req.body
- *    - Hashes password, saves user in DB
  */
 app.post('/register', async (req, res) => {
   try {
     const { username, password } = req.body;
-
-    // Check if user already exists
     const existingUser = await Tay.findOne({ username });
+
     if (existingUser) {
       return res.status(400).json({ error: 'Username already in use.' });
     }
 
-    // Hash password
+    // Hash the password
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
@@ -110,8 +133,6 @@ app.post('/register', async (req, res) => {
 
 /**
  * 3) Login route
- *    - Expects { username, password } in req.body
- *    - Compares passwords, returns JWT on success
  */
 app.post('/login', async (req, res) => {
   try {
@@ -130,7 +151,6 @@ app.post('/login', async (req, res) => {
     }
 
     // Generate JWT
-    // In production, keep the secret in an environment variable
     const token = jwt.sign({ userId: user._id }, 'MY_SUPER_SECRET_KEY', {
       expiresIn: '1h',
     });
@@ -146,18 +166,19 @@ app.post('/login', async (req, res) => {
 });
 
 /**
- * 4) Create a new blog post
+ * 4) Create a new blog post (Only if logged in)
  *    - Expects { title, blog, img } in req.body
- *    - (Optional) Could require JWT auth
+ *    - Requires valid token in the Authorization header
  */
-app.post('/blogs', async (req, res) => {
+app.post('/blogs', authenticateUser, async (req, res) => {
   try {
     const { title, blog, img } = req.body;
 
     const newBlog = new Blog({
       title,
       blog,
-      img
+      img,
+      user: req.user.userId, // the currently logged-in user
     });
 
     const savedBlog = await newBlog.save();
@@ -173,7 +194,7 @@ app.post('/blogs', async (req, res) => {
  */
 app.get('/blogs', async (req, res) => {
   try {
-    const blogs = await Blog.find().sort({ createdAt: -1 }); // sort newest first
+    const blogs = await Blog.find().sort({ createdAt: -1 }).populate('user');
     res.json(blogs);
   } catch (error) {
     console.error(error);
