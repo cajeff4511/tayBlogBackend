@@ -7,9 +7,12 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
 
-// For file uploads:
+// For file uploads to S3:
+const AWS = require('aws-sdk');
 const multer = require('multer');
-const path = require('path');
+const multerS3 = require('multer-s3');
+
+require('dotenv').config(); // Only if you're using a .env file
 
 const app = express();
 const port = 3000;
@@ -35,7 +38,6 @@ mongoose
 /*********************************
  *  SCHEMAS & MODELS
  *********************************/
-//testddd
 // Blog schema
 const BlogSchema = new mongoose.Schema(
   {
@@ -108,26 +110,29 @@ function authenticateUser(req, res, next) {
 }
 
 /*********************************
- *  MULTER SETUP (for file uploads)
+ *  AWS S3 & MULTER-S3 SETUP
  *********************************/
-// 1. Configure the storage destination and filename
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    // Make sure you have an "uploads" folder in the same directory
-    cb(null, 'uploads');
-  },
-  filename: (req, file, cb) => {
-    // Use a unique filename
-    const uniqueSuffix = Date.now() + '-' + file.originalname;
-    cb(null, uniqueSuffix);
-  },
+// 1. Configure AWS
+AWS.config.update({
+  accessKeyId: process.env.AWS_ACCESS_KEY_ID,        // or hardcode if testing locally
+  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  region: process.env.AWS_REGION || 'us-east-1',
 });
 
-// 2. Create the multer instance with that storage config
-const upload = multer({ storage });
+const s3 = new AWS.S3();
 
-// 3. Serve images statically from /uploads
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// 2. Configure multer to use S3
+const upload = multer({
+  storage: multerS3({
+    s3: s3,
+    bucket: process.env.S3_BUCKET_NAME,  // e.g., 'tayblogimages'
+    acl: 'public-read',                  // make objects publicly readable if desired
+    key: function (req, file, cb) {
+      const uniqueSuffix = Date.now() + '-' + file.originalname;
+      cb(null, uniqueSuffix);
+    },
+  }),
+});
 
 /*********************************
  *  ROUTES
@@ -137,7 +142,7 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.get('/', (req, res) => {
   res.send('Hello from the blog API!');
 });
-const test = "test"
+
 /**
  * 2) Register a new user
  */
@@ -203,14 +208,16 @@ app.post('/login', async (req, res) => {
  * 4) Upload an image (Only if logged in)
  *    - Expects a file named "image" in form-data
  *    - Requires valid token
- *    - Returns { filePath: 'uploads/...unique-filename.jpg' }
+ *    - Returns { filePath: 'https://...s3.amazonaws.com/unique-filename.jpg' }
  */
 app.post('/upload', authenticateUser, upload.single('image'), (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
     }
-    const filePath = req.file.path; // e.g. "uploads/1677000000-myimage.jpg"
+
+    // multer-s3 adds the location property to req.file
+    const filePath = req.file.location; // e.g. "https://tayblogimages.s3.amazonaws.com/1677000000-myimage.jpg"
     return res.status(200).json({ filePath });
   } catch (error) {
     console.error(error);
@@ -221,7 +228,7 @@ app.post('/upload', authenticateUser, upload.single('image'), (req, res) => {
 /**
  * 5) Create a new blog post (Only if logged in)
  *    - Expects { title, blog, img, category } in req.body
- *    - "img" will be the file path if using /upload, e.g. "uploads/1677000000-myimage.jpg"
+ *    - "img" will be the S3 file path if using /upload, e.g. "https://tayblogimages.s3.amazonaws.com/..."
  */
 app.post('/blogs', authenticateUser, async (req, res) => {
   try {
@@ -250,7 +257,6 @@ app.post('/blogs', authenticateUser, async (req, res) => {
   }
 });
 
-
 /**
  * 6) Get all blog posts
  */
@@ -264,6 +270,9 @@ app.get('/blogs', async (req, res) => {
   }
 });
 
+/**
+ * 7) Delete a blog post
+ */
 app.delete('/blogs/:id', authenticateUser, async (req, res) => {
   try {
     const { id } = req.params;
