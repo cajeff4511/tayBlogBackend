@@ -256,6 +256,20 @@ app.get('/blogs', async (req, res) => {
   }
 });
 
+app.delete('/blogs/:id', authenticateUser, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const deletedBlog = await Blog.findByIdAndDelete(id);
+    if (!deletedBlog) {
+      return res.status(404).json({ error: 'Blog not found.' });
+    }
+    res.json({ message: 'Blog deleted successfully.' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error deleting blog post.' });
+  }
+});
+
 /*********************************
  *  START THE SERVER
  *********************************/
