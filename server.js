@@ -31,6 +31,7 @@ mongoose.connect('mongodb+srv://jeffersonchristian259:Ivh5vgdJAnd9Px2G@taysblog.
  *********************************/
 
 // Blog schema
+// Blog schema
 const BlogSchema = new mongoose.Schema(
   {
     title: {
@@ -45,15 +46,22 @@ const BlogSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    category: {
+      type: String,
+      enum: ['faith cat', 'fitness cat', 'flights cat'], // Allowed categories
+      required: true,
+    },
     user: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Tay',   // references the "Tay" model (User)
+      ref: 'Tay', // references the "Tay" model (User)
     },
   },
   { timestamps: true }
 );
 
 const Blog = mongoose.model('Blog', BlogSchema);
+
+
 
 // User schema (Tay)
 const TaySchema = new mongoose.Schema(
@@ -173,12 +181,15 @@ app.post('/login', async (req, res) => {
  */
 app.post('/blogs', authenticateUser, async (req, res) => {
   try {
-    const { title, blog, img } = req.body;
+    const { title, blog, img, category } = req.body;
+
+    // Optionally, you can add additional validation for the category here
 
     const newBlog = new Blog({
       title,
       blog,
       img,
+      category, // Set the category from the request body
       user: req.user.userId, // the currently logged-in user
     });
 
@@ -189,6 +200,7 @@ app.post('/blogs', authenticateUser, async (req, res) => {
     res.status(500).json({ error: 'Error creating blog post.' });
   }
 });
+
 
 /**
  * 5) Get all blog posts
