@@ -53,7 +53,7 @@ const BlogSchema = new mongoose.Schema(
     },
     category: {
       type: String,
-      enum: ['faith cat', 'fitness cat', 'flights cat'], // Allowed categories
+      enum: ['FAITH', 'FITNESS/WELLNESS', 'FLIGHTS'], // Allowed categories
       required: true,
     },
     user: {
