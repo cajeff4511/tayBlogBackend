@@ -137,7 +137,7 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.get('/', (req, res) => {
   res.send('Hello from the blog API!');
 });
-
+const test = "test"
 /**
  * 2) Register a new user
  */
