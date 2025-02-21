@@ -226,6 +226,13 @@ app.post('/upload', authenticateUser, upload.single('image'), (req, res) => {
 app.post('/blogs', authenticateUser, async (req, res) => {
   try {
     const { title, blog, img, category } = req.body;
+    
+    // Debug log incoming request data
+    console.log('Incoming blog data:', { title, blog, img, category });
+
+    if (!blog || blog.trim() === "") {
+      return res.status(400).json({ error: "Blog content is required." });
+    }
 
     const newBlog = new Blog({
       title,
@@ -238,10 +245,11 @@ app.post('/blogs', authenticateUser, async (req, res) => {
     const savedBlog = await newBlog.save();
     res.status(201).json(savedBlog);
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Error creating blog post.' });
+    console.error('Error creating blog:', error);
+    res.status(500).json({ error: 'Error creating blog post.', details: error.message });
   }
 });
+
 
 /**
  * 6) Get all blog posts
