@@ -7,12 +7,12 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
 
-// For file uploads to S3:
-const AWS = require('aws-sdk');
+// For file uploads to S3 with AWS SDK v3:
+const { S3Client } = require('@aws-sdk/client-s3');
 const multer = require('multer');
-const multerS3 = require('multer-s3');
+const multerS3 = require('multer-s3-v3');
 
-require('dotenv').config(); // Only if you're using a .env file
+require('dotenv').config(); // Load variables from .env
 
 const app = express();
 const port = 3000;
@@ -110,29 +110,31 @@ function authenticateUser(req, res, next) {
 }
 
 /*********************************
- *  AWS S3 & MULTER-S3 SETUP
+ *  AWS S3 & MULTER-S3 SETUP (v3)
  *********************************/
-// 1. Configure AWS
-AWS.config.update({
-  accessKeyId: process.env.AWS_ACCESS_KEY_ID,        // or hardcode if testing locally
-  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+// 1. Instantiate the S3 client from AWS SDK v3
+const s3 = new S3Client({
   region: process.env.AWS_REGION || 'us-east-1',
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  },
 });
 
-const s3 = new AWS.S3();
-
-// 2. Configure multer to use S3
+// 2. Configure multer to use S3 via multer-s3-v3
 const upload = multer({
   storage: multerS3({
     s3: s3,
-    bucket: process.env.S3_BUCKET_NAME,  // e.g., 'tayblogimages'
-    acl: 'public-read',                  // make objects publicly readable if desired
+    bucket: process.env.S3_BUCKET_NAME, // e.g., 'tayblogimages'
+    // Remove the acl property since the bucket does not allow ACLs:
+    // acl: 'public-read',  
     key: function (req, file, cb) {
       const uniqueSuffix = Date.now() + '-' + file.originalname;
       cb(null, uniqueSuffix);
     },
   }),
 });
+
 
 /*********************************
  *  ROUTES
@@ -216,7 +218,7 @@ app.post('/upload', authenticateUser, upload.single('image'), (req, res) => {
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
-    // multer-s3 adds the location property to req.file
+    // multer-s3-v3 adds the location property to req.file
     const filePath = req.file.location; // e.g. "https://tayblogimages.s3.amazonaws.com/1677000000-myimage.jpg"
     return res.status(200).json({ filePath });
   } catch (error) {
