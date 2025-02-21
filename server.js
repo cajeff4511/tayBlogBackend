@@ -1,4 +1,3 @@
-
 /*********************************
  *  SETUP & DEPENDENCIES
  *********************************/
@@ -7,6 +6,10 @@ const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
+
+// For file uploads:
+const multer = require('multer');
+const path = require('path');
 
 const app = express();
 const port = 3000;
@@ -18,7 +21,10 @@ app.use(express.json());
 /*********************************
  *  MONGOOSE CONNECTION
  *********************************/
-mongoose.connect('mongodb+srv://jeffersonchristian259:Ivh5vgdJAnd9Px2G@taysblog.ldkit.mongodb.net/Blog')
+mongoose
+  .connect(
+    'mongodb+srv://jeffersonchristian259:Ivh5vgdJAnd9Px2G@taysblog.ldkit.mongodb.net/Blog'
+  )
   .then(() => {
     console.log('db connected!');
   })
@@ -30,7 +36,6 @@ mongoose.connect('mongodb+srv://jeffersonchristian259:Ivh5vgdJAnd9Px2G@taysblog.
  *  SCHEMAS & MODELS
  *********************************/
 
-// Blog schema
 // Blog schema
 const BlogSchema = new mongoose.Schema(
   {
@@ -61,20 +66,18 @@ const BlogSchema = new mongoose.Schema(
 
 const Blog = mongoose.model('Blog', BlogSchema);
 
-
-
 // User schema (Tay)
 const TaySchema = new mongoose.Schema(
   {
     username: {
       type: String,
       required: true,
-      unique: true
+      unique: true,
     },
     password: {
       type: String,
-      required: true
-    }
+      required: true,
+    },
   },
   { timestamps: true }
 );
@@ -103,6 +106,28 @@ function authenticateUser(req, res, next) {
     return res.status(401).json({ error: 'Invalid or expired token.' });
   }
 }
+
+/*********************************
+ *  MULTER SETUP (for file uploads)
+ *********************************/
+// 1. Configure the storage destination and filename
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    // Make sure you have an "uploads" folder in the same directory
+    cb(null, 'uploads');
+  },
+  filename: (req, file, cb) => {
+    // Use a unique filename
+    const uniqueSuffix = Date.now() + '-' + file.originalname;
+    cb(null, uniqueSuffix);
+  },
+});
+
+// 2. Create the multer instance with that storage config
+const upload = multer({ storage });
+
+// 3. Serve images statically from /uploads
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 /*********************************
  *  ROUTES
@@ -175,21 +200,38 @@ app.post('/login', async (req, res) => {
 });
 
 /**
- * 4) Create a new blog post (Only if logged in)
- *    - Expects { title, blog, img } in req.body
- *    - Requires valid token in the Authorization header
+ * 4) Upload an image (Only if logged in)
+ *    - Expects a file named "image" in form-data
+ *    - Requires valid token
+ *    - Returns { filePath: 'uploads/...unique-filename.jpg' }
+ */
+app.post('/upload', authenticateUser, upload.single('image'), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+    const filePath = req.file.path; // e.g. "uploads/1677000000-myimage.jpg"
+    return res.status(200).json({ filePath });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to upload image.' });
+  }
+});
+
+/**
+ * 5) Create a new blog post (Only if logged in)
+ *    - Expects { title, blog, img, category } in req.body
+ *    - "img" will be the file path if using /upload, e.g. "uploads/1677000000-myimage.jpg"
  */
 app.post('/blogs', authenticateUser, async (req, res) => {
   try {
     const { title, blog, img, category } = req.body;
 
-    // Optionally, you can add additional validation for the category here
-
     const newBlog = new Blog({
       title,
       blog,
       img,
-      category, // Set the category from the request body
+      category,
       user: req.user.userId, // the currently logged-in user
     });
 
@@ -201,9 +243,8 @@ app.post('/blogs', authenticateUser, async (req, res) => {
   }
 });
 
-
 /**
- * 5) Get all blog posts
+ * 6) Get all blog posts
  */
 app.get('/blogs', async (req, res) => {
   try {
