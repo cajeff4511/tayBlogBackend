@@ -272,6 +272,28 @@ app.get('/blogs', async (req, res) => {
   }
 });
 
+app.put('/blogs/:id', authenticateUser, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { title, blog, img, category } = req.body;
+
+    const updatedBlog = await Blog.findByIdAndUpdate(
+      id,
+      { title, blog, img, category },
+      { new: true } // Return the updated document
+    );
+
+    if (!updatedBlog) {
+      return res.status(404).json({ error: 'Blog not found.' });
+    }
+
+    res.json(updatedBlog);
+  } catch (error) {
+    console.error('Error updating blog:', error);
+    res.status(500).json({ error: 'Error updating blog post.', details: error.message });
+  }
+});
+
 /**
  * 7) Delete a blog post
  */
