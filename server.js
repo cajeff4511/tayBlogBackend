@@ -25,9 +25,7 @@ app.use(express.json());
  *  MONGOOSE CONNECTION
  *********************************/
 mongoose
-  .connect(
-    'mongodb+srv://jeffersonchristian259:Ivh5vgdJAnd9Px2G@taysblog.ldkit.mongodb.net/Blog'
-  )
+  .connect(process.env.MONGODB_SECRET_KEY)
   .then(() => {
     console.log('db connected!');
   })
